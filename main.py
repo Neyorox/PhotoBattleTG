@@ -1,56 +1,69 @@
-from telegram.ext import Updater, CommandHandler, MessageHandler
+import telebot
 
-# Замените YOUR_BOT_TOKEN на токен вашего бота
-TOKEN = '5954372321:AAHttqBx7383OtFM-SO8_amUpul54SjiZFI'
+token = '6923109786:AAFmV2H5YUbGGbRO7DHn63eE3zp-KH0De78'
+bot = telebot.TeleBot(token)
 
-# Функция-обработчик для получения фотографий от пользователей
-def handle_photos(update, context):
-    # Получаем объект пользователя и его идентификатор
-    user = update.message.from_user
-    user_id = user.id
-
-    # Получаем список фотографий для текущего пользователя
-    user_photos = context.user_data.setdefault(user_id, [])
-
-    # Проверяем количество фотографий пользователя
-    if len(user_photos) < 2:
-        # Если фотографий меньше двух, добавляем текущую фотографию в список
-        user_photos.append(update.message.photo[-1].file_id)
-    else:
-        # Если фотографий достаточно, пересылаем их в канал и очищаем список
-        channel_id = '@your_channel_id'
-        channel_text = 'Фотографии от пользователя {}:'.format(user_id)
-
-        # Добавляем описание для каждой фотографии
-        for photo_id in user_photos:
-            channel_text += '\n{}'.format(photo_id)
-
-        # Создаем объект бота и отправляем фотографии в канал
-        bot = context.bot
-        bot.send_message(chat_id=channel_id, text=channel_text)
-
-        # Очищаем список фотографий пользователя
-        user_photos.clear()
-
-# Функция-обработчик для остальных сообщений пользователей
-def handle_other(update, context):
-    update.message.reply_text('Отправлять можно только фотографии')
+users_photos = {}  # Словарь для хранения одной фотографии от каждого пользователя
 
 
-def main():
-    # Создаем объект-обновление
+# Обработчик получения фотографий и их совмещения
+@bot.message_handler(content_types=['photo'])
+def handle_photos(message):
+    user_id = message.from_user.id
+
+    # Если у пользователя еще нет фотографии, сохраняем ее
+    if user_id not in users_photos:
+        file_id = message.photo[-1].file_id
+
+        # Сохраняем file_id фотографии для данного пользователя
+        users_photos[user_id] = file_id
+
+        # Если у нас есть фотографии от двух пользователей, отправляем их вместе
+        if len(users_photos) == 2:
+            chat_id = '-1001996206227'
+            if chat_id:
+                try:
+                    # Получаем информацию о пользователях
+                    user1_info = message.from_user
+                    user2_id = next(iter(users_photos.keys() - {user_id}))
+                    user2_info = bot.get_chat_member(chat_id, user2_id)
+
+                    # Получаем file_id фотографий от обоих пользователей
+                    file_id_1 = users_photos[user_id]
+                    file_id_2 = users_photos[user2_id]
+
+                    # Отправляем обе фотографии вместе без описания
+                    bot.send_media_group(chat_id, [
+                        telebot.types.InputMediaPhoto(file_id_1),
+                        telebot.types.InputMediaPhoto(file_id_2)
+                    ])
+
+                    # Формируем описание для сообщения с указанием отправителей
+                    description = (
+                        f"Фотографии от пользователя {user1_info.first_name} (@{user1_info.username}) и "
+                        f"{user2_info.user.first_name} (@{user2_info.user.username})"
+                    )
+
+                    # Отправляем текстовое сообщение с описанием
+                    bot.send_message(chat_id, description)
+
+                    # Очищаем словарь фотографий после отправки
+                    users_photos.clear()
+                except Exception as e:
+                    print(f"Ошибка при отправке фотографий: {e}")
 
 
-    updater = Updater(TOKEN, use_context=True)
+# Обработчик текстовых сообщений
+@bot.message_handler(content_types=['text'])
+def handle_text(message):
+    # Здесь можно добавить обработку текстовых сообщений, если необходимо
+    pass
 
-    # Получаем диспетчер для обработки команд
-    dispatcher = updater.dispatcher
 
-    # Добавляем обработчики сообщений
-
-
-    # Запускаем бота
-    updater.start_polling()
-
+# Запуск бота
 if __name__ == '__main__':
-    main()
+    while True:
+        try:
+            bot.polling(none_stop=True)
+        except Exception as e:
+            print(f"Ошибка бота: {e}")
