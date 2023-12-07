@@ -40,7 +40,7 @@ def handle_photos(message):
 
                     # Формируем описание для сообщения с указанием отправителей
                     description = (
-                        f"Фотографии от пользователя {user1_info.first_name} (@{user1_info.username}) и "
+                        f"Фотографии от пользователя {user1_info} (@{user1_info}) и "
                         f"{user2_info.user.first_name} (@{user2_info.user.username})"
                     )
 
