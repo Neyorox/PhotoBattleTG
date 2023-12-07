@@ -4,7 +4,22 @@ token = '6923109786:AAFmV2H5YUbGGbRO7DHn63eE3zp-KH0De78'
 bot = telebot.TeleBot(token)
 
 users_photos = {}  # Словарь для хранения одной фотографии от каждого пользователя
+user_last_photo_time = {}  # Словарь для хранения времени последней отправки фотографии от пользователя
 
+# Обработчик получения фотографий и их совмещения
+@bot.message_handler(content_types=['photo'])
+def handle_photos(message):
+    user_id = message.from_user.id
+
+    # Проверяем, прошло ли уже больше часа с момента предыдущей отправки фотографии от пользователя
+    if user_id in user_last_photo_time:
+        time_difference = datetime.now() - user_last_photo_time[user_id]
+        if time_difference < timedelta(hours=1):
+            bot.send_message(user_id, "Вы можете отправить фотографию только раз в час.")
+            return
+
+    # Сохраняем время отправки фотографии от пользователя
+    user_last_photo_time[user_id] = datetime.now()
 
 # Обработчик получения фотографий и их совмещения
 @bot.message_handler(content_types=['photo'])
