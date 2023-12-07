@@ -1,69 +1,74 @@
 import telebot
+from telebot import types
+import threading  # Импорт модуля threading
+from datetime import datetime, timedelta
 
 token = '6923109786:AAFmV2H5YUbGGbRO7DHn63eE3zp-KH0De78'
 bot = telebot.TeleBot(token)
 
-users_photos = {}  # Словарь для хранения одной фотографии от каждого пользователя
+users_photos = {}  # Словарь для хранения фотографий от пользователей
+reactions_count = {'❤️': 0, '❤️‍🔥': 0}  # Счетчик реакций к фотографиям
+chat_id = '-1002004177366'  # Укажите ID чата, куда отправлять результаты
 
-
-# Обработчик получения фотографий и их совмещения
 @bot.message_handler(content_types=['photo'])
 def handle_photos(message):
     user_id = message.from_user.id
+    file_id = message.photo[-1].file_id
+    users_photos[user_id] = file_id
 
-    # Если у пользователя еще нет фотографии, сохраняем ее
-    if user_id not in users_photos:
-        file_id = message.photo[-1].file_id
+    if len(users_photos) == 2:
+        photo_1 = users_photos[list(users_photos.keys())[0]]
+        photo_2 = users_photos[list(users_photos.keys())[1]]
 
-        # Сохраняем file_id фотографии для данного пользователя
-        users_photos[user_id] = file_id
+        keyboard_1 = types.InlineKeyboardMarkup()
+        keyboard_1.row(types.InlineKeyboardButton("❤️", callback_data='like_1'),
+                        types.InlineKeyboardButton("❤️‍🔥", callback_data='fire_1'))
 
-        # Если у нас есть фотографии от двух пользователей, отправляем их вместе
-        if len(users_photos) == 2:
-            chat_id = '-1001996206227'
-            if chat_id:
-                try:
-                    # Получаем информацию о пользователях
-                    user1_info = message.from_user
-                    user2_id = next(iter(users_photos.keys() - {user_id}))
-                    user2_info = bot.get_chat_member(chat_id, user2_id)
+        bot.send_media_group(chat_id, [
+            telebot.types.InputMediaPhoto(photo_1),
+            telebot.types.InputMediaPhoto(photo_2)
+        ], reply_markup=keyboard_1)
 
-                    # Получаем file_id фотографий от обоих пользователей
-                    file_id_1 = users_photos[user_id]
-                    file_id_2 = users_photos[user2_id]
+        # Запускаем таймер на 15 минут для подведения итогов голосования
+        timer = threading.Timer(900, end_voting)
+        timer.start()
 
-                    # Отправляем обе фотографии вместе без описания
-                    bot.send_media_group(chat_id, [
-                        telebot.types.InputMediaPhoto(file_id_1),
-                        telebot.types.InputMediaPhoto(file_id_2)
-                    ])
+def end_voting():
+    winner = max(reactions_count, key=reactions_count.get)
+    if winner == '❤️':
+        winner_message = "В первом раунде победила фотография номер 1"
+        bot.send_message(chat_id, winner_message)
+        bot.send_photo(chat_id, users_photos[list(users_photos.keys())[0]])
+    else:
+        winner_message = "В первом раунде победила фотография номер 2"
+        bot.send_message(chat_id, winner_message)
+        bot.send_photo(chat_id, users_photos[list(users_photos.keys())[1]])
 
-                    # Формируем описание для сообщения с указанием отправителей
-                    description = (
-                        f"Фотографии от пользователя {user1_info.first_name} (@{user1_info.username}) и "
-                        f"{user2_info.user.first_name} (@{user2_info.user.username})"
-                    )
+    # Очистка данных после отправки результатов
+    users_photos.clear()
+    reactions_count['❤️'] = 0
+    reactions_count['❤️‍🔥'] = 0
 
-                    # Отправляем текстовое сообщение с описанием
-                    bot.send_message(chat_id, description)
+@bot.callback_query_handler(func=lambda call: True)
+def handle_callback(call):
+    user_id = call.from_user.id
 
-                    # Очищаем словарь фотографий после отправки
-                    users_photos.clear()
-                except Exception as e:
-                    print(f"Ошибка при отправке фотографий: {e}")
+    if call.data == 'like_1':
+        reactions_count['❤️'] += 1
+    elif call.data == 'fire_1':
+        reactions_count['❤️‍🔥'] += 1
 
-
-# Обработчик текстовых сообщений
-@bot.message_handler(content_types=['text'])
-def handle_text(message):
-    # Здесь можно добавить обработку текстовых сообщений, если необходимо
-    pass
-
+    if reactions_count['❤️'] > reactions_count['❤️‍🔥']:
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.row(types.InlineKeyboardButton("❤️", callback_data='like_1'),
+                     types.InlineKeyboardButton("❤️‍🔥", callback_data='fire_1'))
+        bot.send_photo(chat_id, users_photos[list(users_photos.keys())[0]], reply_markup=keyboard)
+    else:
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.row(types.InlineKeyboardButton("❤️", callback_data='like_2'),
+                     types.InlineKeyboardButton("❤️‍🔥", callback_data='fire_2'))
+        bot.send_photo(chat_id, users_photos[list(users_photos.keys())[1]], reply_markup=keyboard)
 
 # Запуск бота
 if __name__ == '__main__':
-    while True:
-        try:
-            bot.polling(none_stop=True)
-        except Exception as e:
-            print(f"Ошибка бота: {e}")
+    bot.polling(none_stop=True)
